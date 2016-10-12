@@ -1,0 +1,511 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Mowing Adventure</title>
+
+<style>
+*
+{
+  padding: 0px;
+  margin: 0px;
+}
+
+#stage 
+{
+  position: relative;
+  width: 180px;
+  height: 180px;
+  margin: 10px;
+  background-image: url("../images/background.png");
+}
+
+.cell
+{
+  display: block;
+  position: absolute;
+  width: 30px;
+  height: 30px;
+}
+
+#game
+{
+  width: 404px;
+  height: 570px;
+  background-color: white;
+  border: 1px dashed black;
+}
+
+@font-face 
+{
+  font-family: freshmarker;
+  src: url("../fonts/freshmarker.ttf");
+}
+
+h1
+{
+  text-align: center;
+  font-family: freshmarker;
+  font-size: 50px;
+}
+
+p
+{
+  font-family: freshmarker;
+  font-size: 20px;
+  width: 384px;
+  padding: 10px;
+}
+
+</style>
+
+<section id="game">
+  <h1>Mow Away!</h1>
+  <div id="stage"></div>
+  <p id="output"></p> 
+</section>
+
+<script>
+
+//Get a reference to the stage and output
+var stage = document.querySelector("#stage");
+var output = document.querySelector("#output");
+
+//Add a keyboard listener
+window.addEventListener("keydown", keydownHandler, false);
+
+//The game map
+var map =
+[
+  [0, 1, 0, 0, 0, 3],
+  [0, 0, 0, 1, 0, 0],
+  [0, 1, 0, 0, 0, 1],
+  [1, 0, 0, 0, 1, 0],
+  [0, 1, 0, 1, 0, 0],
+  [0, 0, 1, 0, 0, 0]
+];
+
+//The game objects map
+var gameObjects =
+[
+  [0, 0, 0, 0, 0, 0],
+  [0, 0, 5, 0, 0, 0],
+  [0, 0, 0, 0, 0, 0],
+  [0, 0, 0, 0, 0, 0],
+  [0, 0, 0, 0, 0, 0],
+  [4, 0, 0, 0, 0, 0]
+];
+
+//Map code
+var SGRASS = 0;
+var LGRASS = 1;
+//var PIRATE = 2;
+var HOME = 3;
+var MOWER= 4;
+var FLOWER = 5;
+
+//The size of each cell
+var SIZE = 30;
+
+//The number of rows and columns
+var ROWS = map.length;
+var COLUMNS = map[0].length;
+
+//Find the ship's and monster's start positions
+var mowerRow;
+var mowerColumn;
+var flowerRow;
+var flowerColumn;
+
+for(var row = 0; row < ROWS; row++) 
+{	
+  for(var column = 0; column < COLUMNS; column++) 
+  {
+    if(gameObjects[row][column] === MOWER)
+    { 
+      mowerRow = row;
+      mowerColumn = column;
+    }
+    if(gameObjects[row][column] === FLOWER)
+    { 
+      flowerRow = row;
+     flowerColumn = column;
+    }
+  }
+}
+
+//Arrow key codes
+var UP = 38;
+var DOWN = 40;
+var RIGHT = 39;
+var LEFT = 37;
+
+//The game variables
+var gas = 10;
+var energy = 10;
+var experience = 0;
+var gameMessage = "Use the arrow keys to cut the grass and get home, but be careful of the flowers.";
+
+render();
+
+function keydownHandler(event)
+{ 
+  switch(event.keyCode)
+  {
+    case UP:
+	    if(mowerRow > 0)
+	    {
+	      //Clear the ship's current cell
+	      gameObjects[mowerRow][mowerColumn] = 0;
+	      
+	      //Subract 1 from the ship's row
+	      mowerRow--;
+	      
+	      //Apply the ship's new updated position to the array
+	      gameObjects[mowerRow][mowerColumn] = MOWER;
+	    }
+	    break;
+	  
+	  case DOWN:
+	    if(mowerRow < ROWS - 1)
+	    {
+	      gameObjects[mowerRow][mowerColumn] = 0;
+	      mowerRow++;
+	      gameObjects[mowerRow][mowerColumn] = MOWER;
+	    }
+	    break;
+	    
+	  case LEFT:
+	    if(mowerColumn > 0)
+	    {
+	      gameObjects[mowerRow][mowerColumn] = 0;
+	      mowerColumn--;
+	      gameObjects[mowerRow][mowerColumn] = MOWER;
+	    }
+	    break;  
+	    
+	  case RIGHT:
+	    if(mowerColumn < COLUMNS - 1)
+	    {
+	      gameObjects[mowerRow][mowerColumn] = 0;
+	      mowerColumn++;
+	      gameObjects[mowerRow][mowerColumn] = MOWER;
+	    }
+	    break; 
+  }
+  
+  //find out what kind of cell the ship is on
+  switch(map[mowerRow][mowerColumn])
+  {
+    case SGRASS:
+      gameMessage = "Cut the grass!."
+      break;
+    
+    //case PIRATE:
+      //fight();
+      //break; 
+    
+    case LGRASS:
+      trade();
+      break; 
+      
+    case HOME:
+      endGame();
+      break;      
+  }
+  
+  //Move the monster
+  moveFlower();
+  
+  
+  //Find out if the ship is touching the monster
+  if(gameObjects[mowerRow][mowerColumn] === FLOWER)
+  {
+    endGame();
+  }
+  
+  //Subtract some food each turn
+  gas--;
+  
+  //Find out if the ship has run out of food or gold
+  if(gas <= 0 || energy <= 0)
+  {
+    endGame();
+  }
+  
+  //Render the game
+  render();
+}
+
+function moveFlower()
+{
+  //The 4 possible directions that the monster can move
+  var UP = 1;
+  var DOWN = 2;
+  var LEFT = 3;
+  var RIGHT = 4;
+  
+  //An array to store the valid direction that
+  //the monster is allowed to move in
+  var validDirections = [];
+  
+  //The final direction that the monster will move in
+  var direction = undefined;
+  
+  //Find out what kinds of things are in the cells 
+  //that surround the monster. If the cells contain water,
+  //push the corresponding direction into the validDirections array
+  if(flowerRow > 0)
+  {
+    var thingAbove = map[flowerRow - 1][flowerColumn];
+    if(thingAbove === SGRASS)
+	  {
+	    validDirections.push(UP);
+	  }
+  }
+  if(flowerRow < ROWS - 1)
+  { 
+    var thingBelow = map[flowerRow + 1][flowerColumn];
+    if(thingBelow === SGRASS)
+	  {
+	    validDirections.push(DOWN);
+	  }
+  }
+  if(flowerColumn > 0)
+  {
+    var thingToTheLeft = map[flowerRow][flowerColumn - 1];
+    if(thingToTheLeft === SGRASS)
+	  {
+	    validDirections.push(LEFT);
+	  }
+  } 
+  if(flowerColumn < COLUMNS - 1)
+  {
+    var thingToTheRight = map[flowerRow][flowerColumn + 1];
+    if(thingToTheRight === SGRASS)
+	  {
+	    validDirections.push(RIGHT);
+	  }
+  } 
+  
+  //The validDirections array now contains 0 to 4 directions that the 
+  //contain WATER cells. Which of those directions will the monster
+  //choose to move in?
+  
+  //If a valid direction was found, Randomly choose one of the 
+  //possible directions and assign it to the direction variable
+  if(validDirections.length !== 0)
+  {
+    var randomNumber = Math.floor(Math.random() * validDirections.length);
+    direction = validDirections[randomNumber];
+  }
+  
+  //Move the monster in the chosen direction
+  switch(direction)
+  {
+    case UP:
+      //Clear the monster's current cell
+		  gameObjects[flowerRow][flowerColumn] = 0;
+		  //Subtract 1 from the monster's row
+		  flowerRow--; 
+		  //Apply the monster's new updated position to the array
+		  gameObjects[flowerRow][flowerColumn] = FLOWER;
+		  break;
+	  
+	  case DOWN:
+	    gameObjects[flowerRow][flowerColumn] = 0;
+		  flowerRow++;
+		  gameObjects[flowerRow][flowerColumn] = FLOWER;
+	    break;
+	  
+	  case LEFT:
+	    gameObjects[flowerRow][flowerColumn] = 0;
+		  flowerColumn--;
+		  gameObjects[flowerRow][flowerColumn] = FLOWER;
+	    break;
+	 
+	 case RIGHT:
+	    gameObjects[flowerRow][flowerColumn] = 0;
+		  flowerColumn++;
+		  gameObjects[flowerRow][flowerColumn] = FLOWER;
+  }
+}
+
+function trade()
+{
+  //Figure out how much food the island has
+  //and how much it should cost
+  var mowerGas = experience + energy;
+  var cost = Math.ceil(Math.random() * mowerGas);
+  
+  //Let the player buy food if there's enough gold
+  //to afford it
+  if(energy > cost)
+  {
+    gas += mowerGas;
+    energy -= cost;
+    experience += 2;
+    
+    gameMessage 
+      = "You get " + mowerGas + " fuel"
+      + " for " + cost + " energy."
+  }
+  else
+  {
+    //Tell the player if they don't have enough gold
+    experience += 1;
+    gameMessage = "You don't have enough energy to get fuel."
+  }
+}
+
+/*function fight()
+{
+  
+  //The ships strength
+  var shipStrength = Math.ceil((food + gold) / 2);
+  
+  //A random number between 1 and the ship's strength
+  var pirateStrength = Math.ceil(Math.random() * shipStrength * 2);
+  
+  if(pirateStrength > shipStrength)
+  {
+    //The pirates ransack the ship
+    var stolenGold = Math.round(pirateStrength / 2);
+    gold -= stolenGold;
+    
+    //Give the player some experience for trying  
+    experience += 1;
+    
+    //Update the game message
+    gameMessage 
+      = "You fight and LOSE " + stolenGold + " gold pieces."
+      + " Ship's strength: " + shipStrength 
+      + " Pirate's strength: " + pirateStrength;
+  }
+  else
+  {
+    //You win the pirates' gold
+    var pirateGold = Math.round(pirateStrength / 2);
+    gold += pirateGold;
+    
+    //Add some experience  
+    experience += 2;
+    
+    //Update the game message
+    gameMessage 
+      = "You fight and WIN " + pirateGold + " gold pieces."
+      + " Ship's strength: " + shipStrength 
+      + " Pirate's strength: " + pirateStrength;
+  } 
+}*/
+
+function endGame()
+{
+  if(map[mowerRow][mowerColumn] === HOME)
+  {
+    //Calculate the score
+    var score = gas + energy + experience;
+    
+    //Display the game message
+    gameMessage 
+      = "You successfully cut the grass! " + "Final Score: " + score; 
+  }
+  else if(gameObjects[mowerRow][mowerColumn] === FLOWER)
+  {
+    gameMessage 
+      = "You cut your mom's flowers! You lose!";
+  }
+  else
+  {
+    //Display the game message
+    if(energy <= 0)
+    {
+      gameMessage += " You've run out of energy!"; 
+    }
+    else
+    {
+      gameMessage += " You've run out of fuel!"; 
+    }
+    
+    //gameMessage 
+     // += " Your crew throws you overboard!"; 
+  }
+  
+  //Remove the keyboard listener to end the game
+  window.removeEventListener("keydown", keydownHandler, false);
+}
+
+function render()
+{
+  //Clear the stage of img cells
+  //from the previous turn
+  
+  if(stage.hasChildNodes())
+  {
+    for(var i = 0; i < ROWS * COLUMNS; i++) 
+    {	 
+      stage.removeChild(stage.firstChild);
+    }
+  }
+  
+  //Render the game by looping through the map arrays
+  for(var row = 0; row < ROWS; row++) 
+  {	
+    for(var column = 0; column < COLUMNS; column++) 
+    { 
+      //Create a img tag called cell
+      var cell = document.createElement("img");
+
+      //Set it's CSS class to "cell"
+      cell.setAttribute("class", "cell");
+
+      //Add the img tag to the <div id="stage"> tag
+      stage.appendChild(cell);
+
+      //Find the correct image for this map cell
+      switch(map[row][column])
+      {
+        case SGRASS:
+          cell.src = "../images/shortgrass.png";
+          break;
+
+        case LGRASS:
+          cell.src = "../images/longgrass.png";
+          break; 
+
+        //case PIRATE:
+          //cell.src = "../images/pirate.png";
+          //break; 
+
+        case HOME:
+          cell.src = "../images/home.png";
+          break;   
+      }  
+      
+      //Add the ship and monster from the gameObjects array
+	    switch(gameObjects[row][column])
+	    {
+	      case MOWER:
+	        cell.src = "../images/lawn-mower.png";
+	        break;   
+	        
+	      case FLOWER:
+	        cell.src = "../images/flower.png";
+	        break;  
+	    } 
+  
+      //Position the cell 
+      cell.style.top = row * SIZE + "px";
+      cell.style.left = column * SIZE + "px";
+    }
+  }
+  
+  //Display the game message
+	output.innerHTML = gameMessage;
+	
+	//Display the player's food, gold, and experience
+	output.innerHTML 
+	  += "<br>Energy: " + energy + ", Fuel: " 
+	  + gas + ", Experience: " + experience;
+}
+
+</script>
+
